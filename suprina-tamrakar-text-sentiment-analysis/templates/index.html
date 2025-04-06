@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Sentiment Analysis</title>
+</head>
+<body>
+    <h2>Chat Sentiment Analysis</h2>
+    <div id="chat-box"></div>
+    <form id="chat-form">
+        <input type="text" id="chat-input" placeholder="Type your message...">
+        <button type="submit">Send</button>
+    </form>
+    <script>
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = document.getElementById('chat-input').value;
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_input: message })
+            });
+            const result = await response.json();
+            const sentiment = result.sentiment;
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML += `<p>You: ${message} -> AI: ${sentiment}</p>`;
+            document.getElementById('chat-input').value = '';
+        });
+    </script>
+</body>
+</html>
