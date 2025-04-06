@@ -1,5 +1,11 @@
 import os
+import sys
+
+# Add the scripts directory to the sys.path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
+
 from parser import parse_apple_report, save_to_csv
+from config import GAME_MAPPING, DEFAULT_GAME_NAME
 
 INPUT_FOLDER = "data/input/"
 OUTPUT_FILE = "data/output/combined_output.csv"

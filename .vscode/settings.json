@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./aliaksei_f_folder/scripts"
+    ]
+}
