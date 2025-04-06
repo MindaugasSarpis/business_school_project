@@ -1,0 +1,26 @@
+# Virtual environment and unnecessary files
+venv/
+sentiment_env/
+*.pyc
+__pycache__/
+*.pkl
+*.log
+
+# IDE and OS files
+.vscode/
+.idea/
+*.DS_Store
+
+# Python packages and cache
+*.egg-info/
+*.egg
+*.pyo
+*.pyd
+*.pdb
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Environment variables
+.env
+
