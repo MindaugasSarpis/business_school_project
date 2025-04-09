@@ -1,0 +1,42 @@
+# === Virtual environment and unnecessary files ===
+venv/
+sentiment_env/
+*.pyc
+__pycache__/
+*.pkl
+*.log
+
+# === IDE and OS files ===
+.vscode/
+.idea/
+*.DS_Store
+
+# === Python packaging, cache, and build ===
+*.egg-info/
+.eggs/
+*.whl
+*.wheel
+build/
+dist/
+develop-eggs/
+*.manifest
+
+# === Temporary and backup files ===
+*.tmp
+*.bak
+*.swp
+*.swo
+*.~
+
+# === Jupyter notebook checkpoints ===
+.ipynb_checkpoints/
+
+# === Environment variables ===
+.env
+.env.*
+
+# === Test and coverage reports (optional) ===
+.tox/
+.pytest_cache/
+.coverage
+htmlcov/
