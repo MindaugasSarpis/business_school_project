@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Tracker Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            text-align: center;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Instagram Tracker Dashboard</h1>
+        <a href="/logout" class="btn">Logout</a>
+        
+        <h2>Tracked Accounts</h2>
+        <table>
+            <tr>
+                <th>Observer</th>
+                <th>Target</th>
+                <th>Last Checked</th>
+                <th>Action</th>
+            </tr>
+            <tr>
+                <td>kornelamarchevka</td>
+                <td>izylemonsqueeze</td>
+                <td>2025-03-21 16:41:04</td>
+                <td><button class="btn" onclick="checkNow()">Check Now</button></td>
+            </tr>
+        </table>
+        
+        <h2>📉 Unfollowers Log</h2>
+        <canvas id="unfollowersChart"></canvas>
+    </div>
+
+    <script>
+        function checkNow() {
+            alert("Checking for updates...");
+        }
+        
+        const ctx = document.getElementById('unfollowersChart').getContext('2d');
+        const unfollowersChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ["16:40", "16:41"],
+                datasets: [{
+                    label: "Unfollowers",
+                    data: [12, 5],
+                    borderColor: "#ff6384",
+                    backgroundColor: "rgba(255,99,132,0.2)",
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.vscode/
+.chroma_db/
+.hf_cache/
+__pycache__/
+playground.py
+.env
+.DS_Store
+TODO
+.files/
+.chainlit/
+chainlit.md
+chroma_db/
