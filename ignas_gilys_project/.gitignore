@@ -1,0 +1,12 @@
+node_modules
+dist
+out
+.DS_Store
+*.log*
+DerivedData/
+resources/*.app
+xcuserdata/
+*.xcworkspace
+*.xcuserstate
+logs
+macos/build
