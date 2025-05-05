@@ -4,6 +4,12 @@ Track prices of products and services (like ASOS, Wizzair or Booking.com) and ge
 
 ---
 
+## 🤖 Try the Bot
+
+You can try the Telegram bot here 👉 [@DeeptechprojctBot](https://t.me/DeeptechprojctBot)
+
+---
+
 ## 📦 Requirements
 
 To run this bot on another PC, install the following Python packages:
