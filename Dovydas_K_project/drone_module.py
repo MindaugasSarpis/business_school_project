@@ -1,322 +1,176 @@
-import os
-import re
-import glob
-import math
-import pandas as pd
+import re #we use re to define patterns and extract (parse) latitude, longitude, timestamps, etc., from the text in your .SRT files.
+import os #We use functions like os.path.join, os.listdir, or os.path.exists to locate and manage file paths in a cross-platform way.
+from pathlib import Path #The pathlib module provides an object-oriented way to handle file paths (the Path class).
+import pandas as pd #We collect all parsed metadata into a DataFrame, which makes it easy to sort, filter, compute elapsed time, and (optionally) write out to Excel.
 
-import dash
-from dash import dcc, html, Input, Output
-import plotly.express as px
-import plotly.graph_objects as go
+import dash #The core Dash framework for building interactive web apps in pure Python
+from dash import dcc, html, Input, Output #dcc (“Dash Core Components”) — pre-built components like sliders and graphs. html — functions for HTML tags (e.g. html.Div, html.H1). Input, Output — decorators that wire up callbacks (so when the slider moves, Dash knows which function to run).
+import plotly.express as px #Plotly Express, a high-level API for quickly drawing common chart types (scatter plots, line charts, mapbox maps, etc.). In this case, base map with minimal code.
+import plotly.graph_objects as go #Plotly’s lower-level ­“graph objects” API, which gives you full control over traces and layouts. In this case e combine go.Scattermapbox and go.Scatter to layer custom lines and markers on the map and altitude plot.
+import math #Built-in math library. Used math.cos and math.radians (and basic arithmetic) to estimate a reasonable map zoom level from your GPS bounding box.
 
-def parse_time(time_str):
+def parse_srt_data(data_dir: str) -> pd.DataFrame: #def - funcion | name of funcion | data_dir is defining location of my data and "str" defines it as string (text) | data frame - way of defining table
     """
-    Convert a time string in format HH:MM:SS,ms to total seconds.
-    Example: '00:00:00,033' -> 0.033 seconds
+    Read all .SRT files in `data_dir` and extract:
+      - timestamp (datetime)
+      - time (float seconds since start)
+      - latitude, longitude
+      - rel_alt, abs_alt
+      - source_file
+    Returns a DataFrame with those columns.
     """
-    parts = time_str.split(":")
-    h = int(parts[0])
-    m = int(parts[1])
-    s, ms = parts[2].split(",")
-    s = int(s)
-    ms = int(ms)
-    return h * 3600 + m * 60 + s + ms / 1000.0
+    data_dir = Path(data_dir) #Path is directory string, which allows simplified identification of file paths. (it knows what is "parent", "name", or "suffix" on it's own)
+    patterns = { #dictionary of regex (regular expression) patterns to search for in the SRT files
+        'timestamp': re.compile(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})'),
+        'latitude':  re.compile(r'latitude\s*:\s*([-\d.]+)'), #looks for literal world "latitute", \s* any whitespace for any lenght(*), "-" allows for negative numbers, but still allows positives, \d any digit 0-9, "." litteral dot (in this case decimal point), "+" - one or more of those characters in a row.
+        'longitude': re.compile(r'longitude\s*:\s*([-\d.]+)'),
+        'rel_alt':   re.compile(r'rel_alt\s*:\s*([-\d.]+)'),
+        'abs_alt':   re.compile(r'abs_alt\s*:\s*([-\d.]+)')
+    }
+    all_data = [] #define empty list to store all data
+    for srt_file in data_dir.glob("*.SRT"): #loop through all files in the data_dir that end with .SRT | glob - function that returns all files in the directory that match the pattern
+        with srt_file.open(encoding='utf-8') as f: #with allows to open the file and then automatically close it when done | srt_file - file object | encoding - utf-8 is a common text encoding that supports many characters
+            lines = f.readlines() #in previous line we opened file "f" and now we read all lines in the file and store them in the list "lines".
+        entry = {} #can hold only one entry at a time, so we clear it for each file, while "all_data" holds all entries from all files.
+        for line in lines:
+            text = line.strip() #strip removes leading and trailing whitespace (spaces, tabs, newlines) from the line.
+            for key, pat in patterns.items(): # key looks for dictionary keys (timestamp, latitude, etc.) and pat looks for the regex pattern in the dictionary "patterns".
+                m = pat.search(text) #search - looks for the pattern (re.compile(XXX)) in the text. If we find it - we store location information in "m".
+                if m: #if m is not None (meaning we found a match in previous line)
+                    val = m.group(1) #group(1) - returns the capturing group from the match object (m). This is the part of the text that matched the regex pattern in parentheses (žr. line 24).
+                    if key in ('latitude','longitude','rel_alt','abs_alt'):
+                        val = float(val) #we conver string value to float (decimal number).
+                    entry[key] = val #store the value in the entry dictionary with the idenfitication key (timestamp, latitude, etc.).
+            # once we have a full set, record it
+            if all(k in entry for k in ('timestamp','latitude','longitude','rel_alt','abs_alt')): # all check if key (k) exists (TURE/FALSE) in entry ("in" checks if key is in dictionary). Then loop through all keys in the entry dictionary and check if they are in the list of keys we want to extract.
+                entry['source_file'] = srt_file.name #we add to entry dictionary the name of the file we are currently processing.
+                all_data.append(entry.copy()) #we add entry to the all_data list. Each loop we add all 5 values we have and and each loop (or entry) is seperated using new line.
+                entry.clear() # we clear the entry dictionary for the next file.
 
-def parse_srt_file(file_path, start_time_offset=0, flight_number=1):
-    """
-    Parse a standard .SRT file. Each block is expected to have:
-      1. An index line (e.g., '1')
-      2. A timecode line in the format "HH:MM:SS,mmm --> HH:MM:SS,mmm"
-      3. One or more lines of text containing flight metadata
+    df = pd.DataFrame(all_data) #turing collected list of records into a Pandas table (data frame). Dict keys become column names and dict values become rows.
+    if df.empty:
+        return df #if no data was found, we return empty data frame.
 
-    We extract the 'end' time as the reference time and use regex to pull out
-    latitude, longitude, rel_alt, and abs_alt.
-    """
-    data_list = []
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # Split content into blocks (subtitles are separated by blank lines)
-    blocks = re.split(r'\n\s*\n', content.strip())
-    
-    for block in blocks:
-        lines = block.strip().splitlines()
-        if len(lines) < 2:
-            # Not enough lines to parse index + time range
-            continue
-        
-        # First line is the index (ignored), second line is the time range
-        # e.g., "00:00:00,000 --> 00:00:00,033"
-        time_line = lines[1].strip()
-        if "-->" not in time_line:
-            continue
-        
-        start_time_str, end_time_str = [s.strip() for s in time_line.split("-->")]
-        
-        try:
-            # Use the END time as reference
-            end_seconds = parse_time(end_time_str)
-        except Exception:
-            continue
-        
-        cumulative_time = start_time_offset + end_seconds
-        
-        # Combine remaining lines (metadata) into one string
-        text = " ".join(lines[2:]).strip()
-        
-        # Use regex to extract the metadata fields
-        # [latitude: 61.708302] [longitude: 10.158810] [rel_alt: 120.000 abs_alt: 1220.922]
-        lat_match = re.search(r'\[latitude:\s*([\d.\-]+)\]', text)
-        lon_match = re.search(r'\[longitude:\s*([\d.\-]+)\]', text)
-        alt_match = re.search(r'\[rel_alt:\s*([\d.\-]+)\s*abs_alt:\s*([\d.\-]+)\]', text)
-        
-        if not (lat_match and lon_match and alt_match):
-            continue
-        
-        try:
-            latitude = float(lat_match.group(1))
-            longitude = float(lon_match.group(1))
-            rel_alt = float(alt_match.group(1))
-            abs_alt = float(alt_match.group(2))
-        except Exception:
-            continue
-        
-        data_list.append({
-            "time": cumulative_time,
-            "latitude": latitude,
-            "longitude": longitude,
-            "rel_alt": rel_alt,
-            "abs_alt": abs_alt,
-            "flight": flight_number
-        })
-    
-    df = pd.DataFrame(data_list)
-    return df
+    # parse times, sort, compute seconds since start
+    df['timestamp'] = pd.to_datetime(df['timestamp']) #orverwrite the timestamp column with the parsed datetime object (convert string to datetime).
+    df = df.sort_values('timestamp').reset_index(drop=True) #sort the data frame by timestamp and reset the index (drop=True means we don't want to keep the old index).
+    t0 = df['timestamp'].iloc[0] #defining t0 as the first timestamp in the data frame. iloc is used to access the first row (not index) of the data frame.
+    df['time'] = (df['timestamp'] - t0).dt.total_seconds() #compute (and add new column) the time since the start of the flight (t0). We subtract t0 from each timestamp and convert it to seconds using dt.total_seconds().
 
-def process_all_srt_files(data_folder):
-    """
-    Scan the provided folder for .srt files, sort them by the numeric value in their filename,
-    parse each file (adjusting cumulative time), and combine into one DataFrame.
-    """
-    srt_files = glob.glob(os.path.join(data_folder, "*.srt"))
-    
-    # Sort files based on the first numeric group in the filename
-    def extract_number(filename):
-        m = re.search(r'(\d+)', os.path.basename(filename))
-        return int(m.group(1)) if m else float('inf')
-    
-    srt_files.sort(key=extract_number)
-    
-    df_all = pd.DataFrame()
-    time_offset = 0.0
-    flight_number = 1
-    
-    for srt_file in srt_files:
-        df = parse_srt_file(srt_file, start_time_offset=time_offset, flight_number=flight_number)
-        if not df.empty:
-            df_all = pd.concat([df_all, df], ignore_index=True)
-            time_offset = df["time"].max()  # Next file starts from this time
-            flight_number += 1
-    
-    return df_all
+    # 1) Compute the raw inter‐frame deltas
+    df['dt'] = df['time'].diff().fillna(0)
+    # 2) Treat any big gap (here > 5 s) as no gap at all
+    GAP_THRESH = 5.0  # seconds — tune to your flights’ expected idle-time
+    df.loc[df['dt'] > GAP_THRESH, 'dt'] = 0
+    # 3) Cumulate those deltas to get an “adjusted” time axis
+    df['time_adj'] = df['dt'].cumsum()
+    # 4) (Optional) drop the helper column if you like
+    df.drop(columns=['dt'], inplace=True)
 
-def write_excel(df, output_path="output.xlsx"):
-    """
-    Write the DataFrame to an Excel file, overwriting any existing file.
-    """
-    df.to_excel(output_path, index=False)
+    return df #return the data frame with all the data we collected and parsed.
 
-def approximate_zoom_level(min_lat, max_lat, min_lon, max_lon):
-    """
-    Estimate a reasonable map zoom level based on the bounding box
-    of the lat/lon coordinates. Adjust thresholds as needed.
-    """
-    lat_center = (min_lat + max_lat) / 2
-    
-    # ~111.32 km per degree of latitude
-    lat_dist = (max_lat - min_lat) * 111.32
-    # For longitude, scale by cos of the center latitude
-    lon_dist = (max_lon - min_lon) * 111.32 * math.cos(math.radians(lat_center))
-    max_dist = max(abs(lat_dist), abs(lon_dist))
-    
-    # Very rough thresholds for demonstration
-    if max_dist < 1:
-        return 14  # Very small area
-    elif max_dist < 5:
-        return 12
-    elif max_dist < 20:
-        return 10
-    elif max_dist < 100:
-        return 8
-    else:
-        return 4  # Very large area
+def approximate_zoom_level(min_lat, max_lat, min_lon, max_lon): #calculates zoom, values are passed from function create_dash_app
+    """Rough zoom based on bounding box size."""
+    lat_center = (min_lat + max_lat)/2 #calculating center of the bounding box (average of min and max latitude).
+    lat_dist = (max_lat - min_lat) * 111.32 #calculating distance in km between min and max latitude. 111.32 is the approximate number of km per degree of latitude.
+    lon_dist = (max_lon - min_lon) * 111.32 * math.cos(math.radians(lat_center)) #earth lines of longtidue converge as you move away from equator. So we use cosine of the latitude to calculate the distance in km between min and max longitude. We convert latitude to radians using math.radians.
+    d = max(abs(lat_dist), abs(lon_dist)) #the largest distance between min and max latitude or longitude. we use d to calculate zoom level.
+    if d < 1:   return 15
+    if d < 5:   return 13
+    if d < 20:  return 11
+    if d < 100: return 9
+    return 4 #if else return 4 (zoom out).
 
-def create_dash_app(df):
+def create_dash_app(df: pd.DataFrame) -> dash.Dash:
     """
-    Create a Dash app that shows:
-      - A map with the flight path (a continuous line) and a marker for the current position.
-      - A slider to select the time (in seconds) along the flight.
-      - An altitude graph below the slider highlighting the current rel_alt.
-      - The map is initially zoomed to fit the entire flight path, and it stays that way
-        each time the slider updates (so you don't have to zoom in again).
+    Build and return a Dash app that shows:
+      - A map of the full flight path plus a moving red marker.
+      - A slider for 'time' in seconds.
+      - An altitude vs time plot with a moving red dot.
     """
-    app = dash.Dash(__name__)
-    
-    # If no data is available, show a simple message.
+    app = dash.Dash(__name__) #dash.Dash - creates a new Dash app instance like hosting web application. __name__ - name of the module (current file). This is used to identify the app and its resources.
     if df.empty:
         app.layout = html.Div([
-            html.H1("Drone Flight Visualization"),
-            html.P("No flight data available to display.")
+            html.H1("Drone Flight Visualization by Dovydas for Artificial Intelligence and Data Analytics"), #title of the app
+            html.P("No data found in .SRT files.") #some paragraph if no data is found in the SRT files.
         ])
         return app
-    
-    # Compute bounding box of entire flight path
-    min_lat = df["latitude"].min()
-    max_lat = df["latitude"].max()
-    min_lon = df["longitude"].min()
-    max_lon = df["longitude"].max()
-    
-    center_lat = (min_lat + max_lat) / 2
-    center_lon = (min_lon + max_lon) / 2
-    zoom_level = approximate_zoom_level(min_lat, max_lat, min_lon, max_lon)
-    
-    max_time = df["time"].max()
-    
-    # Create initial altitude figure
-    altitude_fig = go.Figure()
-    altitude_fig.add_trace(go.Scatter(
-        x=df["time"],
-        y=df["rel_alt"],
-        mode='lines',
-        name='Altitude'
-    ))
-    init_idx = (df["time"] - 0).abs().idxmin()
-    altitude_fig.add_trace(go.Scatter(
-        x=[df["time"].iloc[init_idx]],
-        y=[df["rel_alt"].iloc[init_idx]],
-        mode='markers',
-        marker=dict(color='red', size=10),
-        name=f'Current (Flight {df["flight"].iloc[init_idx]})'
-    ))
-    altitude_fig.update_layout(
-        title="Altitude vs Time",
-        xaxis_title="Time (s)",
-        yaxis_title="Rel Altitude"
-    )
-    
-    # Create initial map figure: show only data up to time=0, but keep bounding box in mind
-    df_map = df[df["time"] <= 0]
-    if df_map.empty:
-        df_map = df.iloc[[0]]  # fallback to first row if there's no data at time=0
-    
-    map_fig = px.scatter_mapbox(
-        df_map,
-        lat="latitude",
-        lon="longitude",
-        center={"lat": center_lat, "lon": center_lon},
-        zoom=zoom_level,
-        height=500,
-        title="Flight Path"
-    )
-    map_fig.update_layout(mapbox_style="open-street-map")
-    
-    if len(df_map) > 1:
-        map_fig.add_trace(go.Scattermapbox(
-            lat=df_map["latitude"],
-            lon=df_map["longitude"],
-            mode='lines',
-            line=dict(width=2, color='blue'),
-            name='Path'
-        ))
-    
-    map_fig.add_trace(go.Scattermapbox(
-        lat=df_map["latitude"],
-        lon=df_map["longitude"],
-        mode='markers',
-        marker=dict(size=10, color='red'),
-        name='Current Position'
-    ))
-    
-    # Build the layout
+
+    # bounding box + zoom
+    min_lat, max_lat = df.latitude.min(), df.latitude.max() #calculating min and max latitude and longitude from the data frame.
+    min_lon, max_lon = df.longitude.min(), df.longitude.max() #calculating min and max longitude from the data frame.
+    center = {"lat": (min_lat+max_lat)/2, "lon": (min_lon+max_lon)/2} #calculating center of the bounding box (average of min and max latitude and longitude).
+    zoom = approximate_zoom_level(min_lat, max_lat, min_lon, max_lon) #calculating zoom level using the function we defined above.
+
+    # initial figures at time=0
+    max_time = df['time_adj'].max() #calculating and defining max time from the data frame.
+    initial_time = 0
+
+    # Layout
     app.layout = html.Div([
-        html.H1("Drone Flight Visualization"),
-        dcc.Graph(id='map-graph', figure=map_fig),
+        html.H1("Drone Flight Visualization by Dovydas K. for Artificial Intelligence and Data Analytics"), #title of the app (same as used when df is empty).
+        dcc.Graph(id='map-graph'), #map graph (empty at the beginning), but when referred to in the callback, it would update this component.
         dcc.Slider(
             id='time-slider',
-            min=0,
-            max=max_time,
-            step=0.1,
-            value=0,
-            marks={int(t): str(int(t)) for t in range(0, int(max_time) + 1, max(1, int(max_time / 10)))}
+            min=0, max=max_time, step=0.1, value=initial_time, #from 0 to max_time, step is 0.1 seconds, initial value is 0 as defined above.
+            marks={int(t): str(int(t)) for t in range(0, int(max_time)+1, max(1,int(max_time/10)))} #these are numbers that are below the map identifying time in seconds.
         ),
-        dcc.Graph(id='altitude-graph', figure=altitude_fig)
+        dcc.Graph(id='altitude-graph')
     ])
-    
+
     @app.callback(
-        [Output('map-graph', 'figure'),
-         Output('altitude-graph', 'figure')],
-        [Input('time-slider', 'value')]
+        [Output('map-graph','figure'),
+         Output('altitude-graph','figure')],
+        [Input('time-slider','value')] #this is the input for the callback, when we move the slider, it will trigger the function update_figures and it will update output (map and altitude graphs mentioned above). It also tracts person movement of the slider on which other shown data depends
     )
-    def update_graphs(selected_time):
-        # Filter data up to selected_time
-        df_filtered = df[df["time"] <= selected_time]
-        if df_filtered.empty:
-            df_filtered = df.iloc[[0]]
-        
-        # Rebuild the map figure but keep the same center and zoom
-        map_fig_updated = px.scatter_mapbox(
-            df_filtered,
-            lat="latitude",
-            lon="longitude",
-            center={"lat": center_lat, "lon": center_lon},
-            zoom=zoom_level,
-            height=500,
-            title="Flight Path"
+    def update_figures(selected_time): #this function is called when the slider is moved. It takes the selected time from the slider as input and updates the map and altitude graphs.
+        # filter up to selected time
+        df_f = df[df['time_adj'] <= selected_time] #takes all data from data frame that is less or equal to selected time (not one entry, but all entries from start until selected time).
+        if df_f.empty:
+            df_f = df.iloc[[0]] #if no data is found, we take the first row (not first index) of the data frame.
+
+        # map: full path grey + path up to now blue + current marker
+        map_fig = go.Figure()
+        map_fig.add_trace(go.Scattermapbox( #single trace draws one continuous grey line through every GPS point from the very start to the very end.
+            lat=df.latitude, lon=df.longitude,
+            mode='lines', line=dict(color='lightgrey', width=2),
+            name='Full Path'
+        ))
+        map_fig.add_trace(go.Scattermapbox( #second trace draws a blue line from the start to the selected time (up to now).
+            lat=df_f.latitude, lon=df_f.longitude,
+            mode='lines', line=dict(color='blue', width=3),
+            name='Progress'
+        ))
+        map_fig.add_trace(go.Scattermapbox( #third trace draws a red dot at the current position of the drone (last point in the data frame).
+            lat=[df_f.latitude.iloc[-1]], lon=[df_f.longitude.iloc[-1]], #iloc[-1] - last row of the data frame.
+            mode='markers', marker=dict(size=12, color='red'),
+            name='Current'
+        ))
+        map_fig.update_layout(
+            mapbox_style='open-street-map',
+            mapbox=dict(center=center, zoom=zoom),
+            margin=dict(l=0,r=0,t=30,b=0)
         )
-        map_fig_updated.update_layout(mapbox_style="open-street-map")
-        
-        # Add flight path line
-        if len(df_filtered) > 1:
-            map_fig_updated.add_trace(go.Scattermapbox(
-                lat=df_filtered["latitude"],
-                lon=df_filtered["longitude"],
-                mode='lines',
-                line=dict(width=2, color='blue'),
-                name='Path'
-            ))
-        
-        # Mark the current position
-        idx = (df["time"] - selected_time).abs().idxmin()
-        current_point = df.iloc[idx]
-        map_fig_updated.add_trace(go.Scattermapbox(
-            lat=[current_point["latitude"]],
-            lon=[current_point["longitude"]],
-            mode='markers',
-            marker=dict(size=10, color='red'),
-            name=f'Current Position (Flight {current_point["flight"]})'
+
+        # altitude plot: full line + current dot
+        alt_fig = go.Figure()
+        alt_fig.add_trace(go.Scatter(
+            x=df['time_adj'], y=df['rel_alt'],
+            mode='lines', name='Altitude'
         ))
-        
-        # Update altitude figure
-        altitude_fig_updated = go.Figure()
-        altitude_fig_updated.add_trace(go.Scatter(
-            x=df["time"],
-            y=df["rel_alt"],
-            mode='lines',
-            name='Altitude'
+        alt_fig.add_trace(go.Scatter(
+            x=[selected_time],
+            y=[df_f['rel_alt'].iloc[-1]], 
+            #y=[df.loc[df['time'].sub(selected_time).abs().idxmin(), 'rel_alt']],
+            mode='markers', marker=dict(size=10, color='red'),
+            name='Current Alt'  
         ))
-        altitude_fig_updated.add_trace(go.Scatter(
-            x=[current_point["time"]],
-            y=[current_point["rel_alt"]],
-            mode='markers',
-            marker=dict(color='red', size=10),
-            name=f'Current Altitude (Flight {current_point["flight"]})'
-        ))
-        altitude_fig_updated.update_layout(
-            title="Altitude vs Time",
-            xaxis_title="Time (s)",
-            yaxis_title="Rel Altitude"
+        alt_fig.update_layout(
+            xaxis_title='Time (s)',
+            yaxis_title='Rel Altitude (m)',
+            margin=dict(l=40,r=20,t=30,b=40)
         )
-        
-        return map_fig_updated, altitude_fig_updated
-    
+
+        return map_fig, alt_fig
+
     return app
