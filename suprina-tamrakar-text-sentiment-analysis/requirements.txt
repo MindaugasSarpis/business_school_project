@@ -1,0 +1,7 @@
+torch
+transformers
+transformers[torch]
+datasets
+pandas
+scikit-learn
+flask

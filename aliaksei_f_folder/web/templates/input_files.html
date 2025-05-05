@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5 class="card-title mb-0">Input Files Management</h5>
+            <div>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary me-2">View Dashboard</a>
+                {% if input_files %}
+                <form action="{{ url_for('process_files_route') }}" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-primary">Process All Files</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3">Upload New Files</h6>
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                    <div class="upload-area" id="dropZone">
+                        <p class="mb-0" id="dropZoneText">Drag and drop files here or click to select files</p>
+                        <div id="selectedFiles" class="mt-2"></div>
+                        <input type="file" name="files[]" multiple accept=".txt" class="d-none" id="fileInput">
+                    </div>
+                    <div class="text-center mt-3">
+                        <button type="submit" class="btn btn-primary" id="uploadButton" style="display: none;">Upload Files</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if input_files %}
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3">Existing Input Files</h6>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in input_files %}
+                            <tr>
+                                <td>{{ file }}</td>
+                                <td>
+                                    <form action="{{ url_for('delete_file', filename=file) }}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <h6>No input files available</h6>
+            <p>Upload some files to get started.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const dropZoneText = document.getElementById('dropZoneText');
+    const selectedFiles = document.getElementById('selectedFiles');
+    const uploadButton = document.getElementById('uploadButton');
+
+    function updateSelectedFiles() {
+        const files = fileInput.files;
+        if (files.length > 0) {
+            dropZoneText.textContent = `${files.length} file(s) selected:`;
+            selectedFiles.innerHTML = '';
+            Array.from(files).forEach(file => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'text-start small text-muted';
+                fileDiv.textContent = `• ${file.name}`;
+                selectedFiles.appendChild(fileDiv);
+            });
+            uploadButton.style.display = 'inline-block';
+        } else {
+            dropZoneText.textContent = 'Drag and drop files here or click to select files';
+            selectedFiles.innerHTML = '';
+            uploadButton.style.display = 'none';
+        }
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#0d6efd';
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = '#ccc';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#ccc';
+        fileInput.files = e.dataTransfer.files;
+        updateSelectedFiles();
+    });
+
+    fileInput.addEventListener('change', updateSelectedFiles);
+</script>
+{% endblock %} 

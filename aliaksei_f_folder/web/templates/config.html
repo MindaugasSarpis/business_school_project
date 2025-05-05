@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5 class="card-title mb-0">Game Configuration</h5>
+            <div>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">Back to Dashboard</a>
+            </div>
+        </div>
+
+        <form action="{{ url_for('update_config') }}" method="post">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-3">Game Mappings</h6>
+                    <p class="text-muted">Configure how SKU prefixes map to game names.</p>
+                    
+                    <div id="gameMappings">
+                        {% for game_id, game_name in game_mapping.items() %}
+                        <div class="row mb-2 game-mapping">
+                            <div class="col-md-5">
+                                <input type="text" class="form-control" name="game_{{ game_id }}" 
+                                       value="{{ game_id }}" placeholder="SKU Prefix" required>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" class="form-control" name="game_name_{{ game_id }}" 
+                                       value="{{ game_name }}" placeholder="Game Name" required>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-danger btn-sm remove-mapping">Remove</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <button type="button" class="btn btn-secondary mt-3" id="addMapping">
+                        Add New Mapping
+                    </button>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-3">Default Game</h6>
+                    <p class="text-muted">Set the default game name for unmatched SKUs.</p>
+                    <input type="text" class="form-control" name="default_game" 
+                           value="{{ default_game }}" placeholder="Default Game Name" required>
+                </div>
+            </div>
+
+            <div class="text-end">
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const gameMappings = document.getElementById('gameMappings');
+        const addMappingBtn = document.getElementById('addMapping');
+        
+        // Add new mapping
+        addMappingBtn.addEventListener('click', function() {
+            const newMapping = document.createElement('div');
+            newMapping.className = 'row mb-2 game-mapping';
+            newMapping.innerHTML = `
+                <div class="col-md-5">
+                    <input type="text" class="form-control" name="game_new" placeholder="SKU Prefix" required>
+                </div>
+                <div class="col-md-5">
+                    <input type="text" class="form-control" name="game_name_new" placeholder="Game Name" required>
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-danger btn-sm remove-mapping">Remove</button>
+                </div>
+            `;
+            gameMappings.appendChild(newMapping);
+        });
+        
+        // Remove mapping
+        gameMappings.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-mapping')) {
+                e.target.closest('.game-mapping').remove();
+            }
+        });
+    });
+</script>
+{% endblock %} 

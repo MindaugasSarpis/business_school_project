@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5 class="card-title mb-0">Revenue Dashboard</h5>
+            <div>
+                <a href="{{ url_for('input_files') }}" class="btn btn-outline-primary me-2">Manage Input Files</a>
+                {% if output_data %}
+                <a href="{{ url_for('download_file') }}" class="btn btn-primary">Download CSV</a>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if output_data %}
+            {% if missing_currencies %}
+                <div class="alert alert-warning">
+                    <h6>Exchange Rates Required</h6>
+                    <p>Please set exchange rates for the following currencies to view revenue charts: {{ missing_currencies|join(', ') }}</p>
+                    <a href="{{ url_for('exchange_rates') }}" class="btn btn-warning">Set Exchange Rates</a>
+                </div>
+            {% else %}
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Revenue by Game</h6>
+                                <canvas id="revenueByGame"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Revenue Distribution</h6>
+                                <canvas id="revenueDistribution"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Overall Revenue Trend</h6>
+                                <canvas id="overallTrend"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Revenue Trends by Game</h6>
+                                <canvas id="gameTrends"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Detailed Data</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Game</th>
+                                    <th>Revenue (EUR)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in output_data %}
+                                <tr>
+                                    <td>{{ row['Period'] }}</td>
+                                    <td>{{ row['Name'] }}</td>
+                                    <td>{{ row['Sum'] }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <h6>No output data available</h6>
+                <p>Please process some input files to generate the revenue report.</p>
+                <a href="{{ url_for('input_files') }}" class="btn btn-primary">Go to Input Files</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if output_data and not missing_currencies %}
+        // Prepare data for charts
+        const data = {{ output_data|tojson }};
+        
+        // Group data by game
+        const gameData = {};
+        const periodData = {};
+        const gameTrends = {};
+        
+        // Get all unique games and periods
+        const allGames = new Set();
+        const allPeriods = new Set();
+        
+        data.forEach(row => {
+            const game = row['Name'];
+            const period = row['Period'];
+            const revenue = parseFloat(row['Sum']);
+            
+            allGames.add(game);
+            allPeriods.add(period);
+            
+            // For game data
+            if (!gameData[game]) {
+                gameData[game] = 0;
+            }
+            gameData[game] += revenue;
+            
+            // For period data
+            if (!periodData[period]) {
+                periodData[period] = 0;
+            }
+            periodData[period] += revenue;
+            
+            // For game trends
+            if (!gameTrends[game]) {
+                gameTrends[game] = {};
+            }
+            gameTrends[game][period] = revenue;
+        });
+
+        // Sort periods
+        const sortedPeriods = Array.from(allPeriods).sort();
+
+        // Revenue by Game (Bar Chart)
+        new Chart(document.getElementById('revenueByGame'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(gameData),
+                datasets: [{
+                    label: 'Revenue',
+                    data: Object.values(gameData),
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Revenue Distribution (Pie Chart)
+        new Chart(document.getElementById('revenueDistribution'), {
+            type: 'pie',
+            data: {
+                labels: Object.keys(gameData),
+                datasets: [{
+                    data: Object.values(gameData),
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+
+        // Overall Revenue Trend (Line Chart)
+        new Chart(document.getElementById('overallTrend'), {
+            type: 'line',
+            data: {
+                labels: sortedPeriods,
+                datasets: [{
+                    label: 'Total Revenue',
+                    data: sortedPeriods.map(period => periodData[period]),
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Period'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Revenue Trends by Game (Line Chart)
+        const colors = [
+            'rgb(255, 99, 132)',
+            'rgb(54, 162, 235)',
+            'rgb(255, 206, 86)',
+            'rgb(75, 192, 192)',
+            'rgb(153, 102, 255)'
+        ];
+
+        const datasets = Array.from(allGames).map((game, index) => ({
+            label: game,
+            data: sortedPeriods.map(period => gameTrends[game][period] || 0),
+            borderColor: colors[index % colors.length],
+            tension: 0.1,
+            fill: false
+        }));
+
+        new Chart(document.getElementById('gameTrends'), {
+            type: 'line',
+            data: {
+                labels: sortedPeriods,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    legend: {
+                        position: 'right'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Period'
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Emotion Detection Chatbot</title>
+  <style>
+    body {
+      background-color: #eef2f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .phone-frame {
+      width: 400px;
+      max-width: 95%;
+      background: white;
+      border-radius: 30px;
+      box-shadow: 0px 12px 30px rgba(0,0,0,0.2);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 650px;
+    }
+
+    .chat-header {
+      background: linear-gradient(135deg, #6C63FF, #5A55E0);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      border-top-left-radius: 30px;
+      border-top-right-radius: 30px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      background-color: #f9f9f9;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message {
+      display: flex;
+      align-items: flex-end;
+      margin-bottom: 15px;
+      opacity: 0;
+      animation: fadeInUp 0.3s forwards;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background-color: #ccc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin: 0 10px;
+    }
+
+    .text-bubble {
+      max-width: 70%;
+      padding: 12px 18px;
+      border-radius: 20px;
+      font-size: 15px;
+      line-height: 1.4;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    .user-message {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .user-message .text-bubble {
+      background: linear-gradient(135deg, #a8ff78, #78ffd6);
+      color: #333;
+    }
+
+    .bot-message {
+      align-self: flex-start;
+    }
+
+    .bot-message .text-bubble {
+      background: #ececec;
+      color: #333;
+    }
+
+    .chat-input {
+      display: flex;
+      border-top: 1px solid #ddd;
+      padding: 15px;
+      background-color: #fff;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 12px 20px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      outline: none;
+    }
+
+    .chat-input button {
+      background: linear-gradient(135deg, #6C63FF, #5A55E0);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      margin-left: 10px;
+      border-radius: 20px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .chat-input button:hover {
+      background: linear-gradient(135deg, #5A55E0, #4d47c3);
+    }
+
+    .typing-dots::after {
+      content: '';
+      display: inline-block;
+      animation: dots 1.5s steps(3, end) infinite;
+    }
+
+    @keyframes dots {
+      0% { content: ''; }
+      33% { content: '.'; }
+      66% { content: '..'; }
+      100% { content: '...'; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="phone-frame">
+    <div class="chat-header">
+      Emotion Detection Chatbot
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <!-- Chat will appear here -->
+    </div>
+
+    <div class="chat-input">
+      <input type="text" id="chat-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMessage();">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    function createMessage(content, sender, avatar, isAnimated=false) {
+      const messages = document.getElementById('chat-messages');
+
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
+
+      const avatarDiv = document.createElement('div');
+      avatarDiv.classList.add('avatar');
+      avatarDiv.innerText = avatar;
+
+      const textBubble = document.createElement('div');
+      textBubble.classList.add('text-bubble');
+
+      if (isAnimated) {
+        textBubble.innerHTML = `<span id="typing-text">Analyzing your feelings<span class="typing-dots"></span></span>`;
+      } else {
+        textBubble.innerText = content;
+      }
+
+      messageDiv.appendChild(avatarDiv);
+      messageDiv.appendChild(textBubble);
+
+      messages.appendChild(messageDiv);
+      messages.scrollTop = messages.scrollHeight;
+
+      return messageDiv;
+    }
+
+    async function sendMessage() {
+      const inputField = document.getElementById('chat-input');
+      const text = inputField.value.trim();
+      if (text === "") return;
+
+      createMessage(text, 'user', '🧑');
+      inputField.value = "";
+      inputField.focus();
+
+      // Create thinking message
+      const thinkingMessage = createMessage('', 'bot', '🤖', true);
+
+      const response = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_input: text })
+      });
+
+      const data = await response.json();
+
+      // Wait artificially to show "thinking" animation for realism
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Replace thinking text with actual sentiment
+      const textBubble = thinkingMessage.querySelector('.text-bubble');
+      textBubble.innerText = data.sentiment;
+    }
+  </script>
+</body>
+</html>

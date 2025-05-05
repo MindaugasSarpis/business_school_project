@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Report Parser</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 2rem;
+            text-align: center;
+            margin: 2rem 0;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #0d6efd;
+        }
+        .nav-link {
+            color: #0d6efd;
+            margin-left: 1rem;
+        }
+        .nav-link:hover {
+            color: #0a58ca;
+        }
+        .nav {
+            display: flex;
+            align-items: center;
+        }
+        .alert {
+            position: relative;
+            padding-right: 2.5rem;
+        }
+        .alert .btn-close {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .title-link {
+            color: inherit;
+            text-decoration: none;
+        }
+        .title-link:hover {
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-center mb-0">
+                <a href="{{ url_for('dashboard') }}" class="title-link">Apple Report Parser</a>
+            </h1>
+            <nav class="nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('input_files') }}" class="nav-link">Input Files</a>
+                <a href="{{ url_for('config') }}" class="nav-link">Configuration</a>
+                <a href="{{ url_for('exchange_rates') }}" class="nav-link">Exchange Rates</a>
+            </nav>
+        </div>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html> 
